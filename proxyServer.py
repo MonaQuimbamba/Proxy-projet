@@ -47,10 +47,11 @@ def getHost(ligne):
    Fonction qui permet de faire un client :
    -  pour se connecter au serveur web
 """
-def makeClient(hostName,port,request):
-    adresse_serveur = socket.gethostbyname(hostName.replace(" ", ""))
+def makeClient(host,port,request):
+    print(repr(request))
+    adresse_serveur = socket.gethostbyname(host.replace(" ", ""))
     numero_port = int(port)
-    print("IP address of the host name {} is: {}".format(hostName, adresse_serveur))
+    print("IP addresse du serveur web  {} est : {} et le port est : {} ".format(host, adresse_serveur,numero_port))
     ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     print(" Client Starting ..... ")
     try:
@@ -62,14 +63,14 @@ def makeClient(hostName,port,request):
     pid = os.fork()
     while 1:
         if not pid:
-            continue
-            #ma_socket.sendall(bytes(tapez,"utf8"))
+            ma_socket.sendall(bytes(request,"utf8"))
         else: # dans le pere
             ligne = str(ma_socket.recv(1024),"utf8")
             if not ligne:
                 break
-            print ("From serveur  : "+hostName +" "+ligne)
-
+            print ("From serveur  : "+ host +" "+ligne)
+            continue
+    ma_socket.close()
 
 """
     Fonction qui envoit une requête au serveur web
@@ -98,12 +99,29 @@ def sendServerResponse():
   - supprimer les lignes commençant par : Connection: Keep-Alive et Proxy-Connection: Keep-Alive
   - supprimer la ligne commençant par Accept-Encoding: gzip
 """
-def makeRequest(ligne):
+def makeRequest(host,ligne):
+    host=host.replace(" ","")
     liste=ligne.splitlines()
+    ## faire la 1ere ligne
     res=""
-    for item in liste:
-        if item.split(":")[0] not in ["Connection","Proxy-Connection","Accept-Encoding"]:
-            res+=item+"\n"
+    if liste[0].split(" ")[0]=="GET":
+        res+="GET http://"+host+"/index.html HTTP/1.0\n"
+
+    if liste[0].split(" ")[0]=="CONNECT":
+        res+="GET https://"+host+"/index.html HTTP/1.0\n"
+
+    if liste[0].split(" ")[0]=="POST":
+        res+="POST https://"+host+"/index.html HTTP/1.0\n"
+
+
+
+    for i in range(1,len(liste)):
+        if liste[i].split(":")[0] not in ["Connection","Proxy-Connection","Accept-Encoding"]:
+            if liste[i]=="":
+                res=res.rstrip()
+                res+="\r\n"
+            else:
+                res+=liste[i]+"\n"
     return res
 
 
@@ -117,19 +135,14 @@ print(" Server listening ..... ")
 while 1:
     (nouvelle_connexion, TSAP_depuis) = ma_socket.accept()
     print ("Nouvelle connexion depuis ", TSAP_depuis)
-    while 1:
-        pid=os.fork()
-        if not pid:
-            ligne = str(nouvelle_connexion.recv(1024),'UTF8')
-            if not ligne:
-                break
-            host,port=getHost(ligne)
-            makeRequest(ligne)
-            
-        else: # dans le pere
-            tapez=input(" Entrer n'importe quoi ")
-            nouvelle_connexion.sendall(bytes(tapez,"utf8"))
-            #print("")
+    ligne = str(nouvelle_connexion.recv(1024),'UTF8')
+    if not ligne:
+        break
+    host,port=getHost(ligne)
+    request=makeRequest(host,ligne)
+    makeClient(host,port,request)
+    #print(repr(request))
+
 
 ma_socket.close()
 #kill -9 $(ps -A | grep python | awk '{print $1}')
