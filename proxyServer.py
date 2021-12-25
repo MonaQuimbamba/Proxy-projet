@@ -23,7 +23,9 @@ def read_line(ma_socket):
     return ligne
 
 """
- Fonction qui permet de prendre l'addresse ip et le port du serveur destination
+ Fonction qui permet de récupérer :
+  - le nom du serveur Web hébergeant la ressource
+  - le numéro de port s'il est indiqué ( par défault le port 80 )
 """
 def getHost(ligne):
     re_get_host= re.compile(r'Host:([\s\S]*)$') # regex pour trouver l'host dans une requete
@@ -32,7 +34,8 @@ def getHost(ligne):
         return host.groups(1)[0].strip("\\r\\n").split(":")
 
 """
-   Fonction qui permet de faire un client pour se connecter au serveur destination
+   Fonction qui permet de faire un client :
+   -  pour se connecter au serveur web
 """
 def makeClient(hostName,port,request):
     adresse_serveur = socket.gethostbyname(hostName.replace(" ", ""))
@@ -57,6 +60,28 @@ def makeClient(hostName,port,request):
                 break
             print ("From serveur  : "+hostName +" "+ligne)
 
+
+"""
+    Fonction qui envoit une requête au serveur web
+"""
+def sendRequest():
+    print("")
+
+"""
+    Fonction va récuperer les infos en réponse du serveur web
+"""
+
+def serverResponse():
+    print("")
+
+
+"""
+    Fonction va renvoyer les infos en réponse au navigateur web
+"""
+def sendServerResponse():
+    print("")
+
+
 """
    Fonction qui permet de preparer la requete
 
@@ -74,33 +99,45 @@ ma_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP)
 ma_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 ma_socket.bind(('127.0.0.1', 8080))
 ma_socket.listen(socket.SOMAXCONN)
-surveillance = [ma_socket]
+#surveillance = [ma_socket]
 print(" Server listening ..... ")
 while 1:
-    (evnt_entree,evnt_sortie,evnt_exception) = select.select(surveillance,[],[])
-    for un_evenement in evnt_entree:
-        if (un_evenement == ma_socket): # il y a une demande de connexion
-            nouvelle_connexion, depuis = ma_socket.accept()
-            print ("Nouvelle connexion depuis ", depuis)
-            surveillance.append(nouvelle_connexion)
-            continue
+    (nouvelle_connexion, TSAP_depuis) = ma_socket.accept()
+    print ("Nouvelle connexion depuis ", TSAP_depuis)
+    while 1:
+        pid=os.fork()
+        if not pid:
+            ligne = str(nouvelle_connexion.recv(1024),'UTF8')
+            if not ligne:
+                break
+            print("From client : "+ligne)
+        else: # dans le pere
+            tapez=input(" Entrer n'importe quoi ")
+            nouvelle_connexion.sendall(bytes(tapez,"utf8"))
+    #(evnt_entree,evnt_sortie,evnt_exception) = select.select(surveillance,[],[])
+    #for un_evenement in evnt_entree:
+    #    if (un_evenement == ma_socket): # il y a une demande de connexion
+    #        nouvelle_connexion, depuis = ma_socket.accept()
+    #        print ("Nouvelle connexion depuis ", depuis)
+    #        surveillance.append(nouvelle_connexion)
+    #        continue
 
         # sinon cela concerne une socket connectée à un client
-        ligne = str(un_evenement.recv(1024),'UTF8')
+    #    ligne = str(un_evenement.recv(1024),'UTF8')
 
-        if not ligne :
-            surveillance.remove(un_evenement) # le client s'est déconnecté
-        else :
+    #    if not ligne :
+    #        surveillance.remove(un_evenement) # le client s'est déconnecté
+    #    else :
             #print (un_evenement.getpeername(),':',
             # preparer le host
 
-            getHost(ligne)
+    #        getHost(ligne)
             # faire le client pour envoyer et envoyer une requete au serveur distination
             #makeClient(host,port,"")
-            makeRequest(ligne)
+    #        makeRequest(ligne)
 
-            continue
+    #        continue
 
 # fermer all sockets
-for client in surveillance:
-    client.close()
+#for client in surveillance:
+#    client.close()
