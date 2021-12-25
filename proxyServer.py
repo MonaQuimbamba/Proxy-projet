@@ -29,9 +29,19 @@ def read_line(ma_socket):
 """
 def getHost(ligne):
     re_get_host= re.compile(r'Host:([\s\S]*)$') # regex pour trouver l'host dans une requete
-    host = re_get_host.search(ligne)
-    if host:
-        return host.groups(1)[0].strip("\\r\\n").split(":")
+    #host = re_get_host.search(ligne)
+    #if host:
+    #    return host.groups(1)
+    port=80
+    host=""
+    for item in ligne.splitlines():
+        if item.split(":")[0]=="Host":
+            if(len(item.split(":"))==3): # si y'a un port
+                host=item.split(":")[1]
+                port=item.split(":")[2]
+            else:
+                host=item.split(":")[1]
+            return host,port
 
 """
    Fonction qui permet de faire un client :
@@ -89,10 +99,13 @@ def sendServerResponse():
   - supprimer la ligne commençant par Accept-Encoding: gzip
 """
 def makeRequest(ligne):
-    ligne=ligne.replace("Connection: Keep-Alive","")
-    #ligne=ligne.replace("Proxy-Connection: Keep-Alive","")
-    #ligne=ligne.replace("Accept-Encoding: gzip","")
-    print(ligne)
+    liste=ligne.splitlines()
+    res=""
+    for item in liste:
+        if item.split(":")[0] not in ["Connection","Proxy-Connection","Accept-Encoding"]:
+            res+=item+"\n"
+    return res
+
 
 """ === main == """
 ma_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP)
@@ -110,10 +123,16 @@ while 1:
             ligne = str(nouvelle_connexion.recv(1024),'UTF8')
             if not ligne:
                 break
-            print("From client : "+ligne)
+            host,port=getHost(ligne)
+            makeRequest(ligne)
+            
         else: # dans le pere
             tapez=input(" Entrer n'importe quoi ")
             nouvelle_connexion.sendall(bytes(tapez,"utf8"))
+            #print("")
+
+ma_socket.close()
+#kill -9 $(ps -A | grep python | awk '{print $1}')
     #(evnt_entree,evnt_sortie,evnt_exception) = select.select(surveillance,[],[])
     #for un_evenement in evnt_entree:
     #    if (un_evenement == ma_socket): # il y a une demande de connexion
