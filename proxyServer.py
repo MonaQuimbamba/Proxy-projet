@@ -1,5 +1,6 @@
 #! /usr/bin/python3
-import sys,os,socket,select
+# coding: utf-8
+import sys,os,socket,select,ssl
 import re
 
 """
@@ -36,11 +37,16 @@ def getHost(ligne):
     host=""
     for item in ligne.splitlines():
         if item.split(":")[0]=="Host":
-            if(len(item.split(":"))==3): # si y'a un port
+            if(len(item.split(":"))==3): # si y'a le port 443
+                # ajouter www dans le host quand y'a pas
                 host=item.split(":")[1]
+                if host.split(".")[0] not in ["www","Www","WWW","wWw","wwW"]:
+                    host="www."+host.replace(" ","")
                 port=item.split(":")[2]
             else:
                 host=item.split(":")[1]
+                if host.split(".")[0] not in ["www","Www","WWW","wWw","wwW"]:
+                    host="www."+host.replace(" ","")
             return host,port
 
 """
@@ -48,7 +54,7 @@ def getHost(ligne):
    -  pour se connecter au serveur web
 """
 def makeClient(host,port,request):
-    print(repr(request))
+
     adresse_serveur = socket.gethostbyname(host.replace(" ", ""))
     numero_port = int(port)
     print("IP addresse du serveur web  {} est : {} et le port est : {} ".format(host, adresse_serveur,numero_port))
@@ -66,24 +72,23 @@ def makeClient(host,port,request):
             ma_socket.sendall(bytes(request,"utf8"))
         else: # dans le pere
             ligne = str(ma_socket.recv(1024),"utf8")
-            if not ligne:
-                break
-            print ("From serveur  : "+ host +" "+ligne)
-            continue
+            if ligne:
+                print ("From serveur  :"+ligne)
+            #continue
     ma_socket.close()
 
 """
     Fonction qui envoit une requête au serveur web
 """
-def sendRequest():
-    print("")
+def sendRequest(socket_client,request):
+    socket_client.sendall(request.encode())
 
 """
-    Fonction va récuperer les infos en réponse du serveur web
+    Fonction qui récupere les infos venant du  serveur web
 """
 
-def serverResponse():
-    print("")
+def serverResponse(socket_client):
+    return socket_client.recv(1024)
 
 
 """
@@ -99,29 +104,27 @@ def sendServerResponse():
   - supprimer les lignes commençant par : Connection: Keep-Alive et Proxy-Connection: Keep-Alive
   - supprimer la ligne commençant par Accept-Encoding: gzip
 """
-def makeRequest(host,ligne):
-    host=host.replace(" ","")
+def makeRequest(ligne):
     liste=ligne.splitlines()
     ## faire la 1ere ligne
     res=""
     if liste[0].split(" ")[0]=="GET":
-        res+="GET http://"+host+"/index.html HTTP/1.0\n"
+        res+="GET / HTTP/1.0\r\n"
 
     if liste[0].split(" ")[0]=="CONNECT":
-        res+="GET https://"+host+"/index.html HTTP/1.0\n"
+        res+="GET / HTTP/1.0\r\n"
 
     if liste[0].split(" ")[0]=="POST":
-        res+="POST https://"+host+"/index.html HTTP/1.0\n"
-
-
-
+        res+="POST / HTTP/1.0\r\n"
+    # faire l'en-tete
     for i in range(1,len(liste)):
         if liste[i].split(":")[0] not in ["Connection","Proxy-Connection","Accept-Encoding"]:
             if liste[i]=="":
                 res=res.rstrip()
-                res+="\r\n"
+                res+="\r\n\r\n"
             else:
-                res+=liste[i]+"\n"
+                tmp=liste[i].rstrip()
+                res+=tmp+"\r\n"
     return res
 
 
@@ -133,43 +136,39 @@ ma_socket.listen(socket.SOMAXCONN)
 #surveillance = [ma_socket]
 print(" Server listening ..... ")
 while 1:
-    (nouvelle_connexion, TSAP_depuis) = ma_socket.accept()
+    (nouvelle_connexion_navigateur, TSAP_depuis) = ma_socket.accept()
     print ("Nouvelle connexion depuis ", TSAP_depuis)
-    ligne = str(nouvelle_connexion.recv(1024),'UTF8')
-    if not ligne:
-        break
-    host,port=getHost(ligne)
-    request=makeRequest(host,ligne)
-    makeClient(host,port,request)
-    #print(repr(request))
+    ligne = nouvelle_connexion_navigateur.recv(1024)
+    if  ligne:
+        ligne=ligne.decode()
+        host,port=getHost(ligne)
+        request=makeRequest(ligne)
+        ## Faire le client
+        adresse_serveur = socket.gethostbyname(host.replace(" ", ""))
+        context = ssl.create_default_context()
+        ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if int(port)==80:
+            s_sock=ma_socket
+        else:
+            s_sock = context.wrap_socket(ma_socket, server_hostname=host)
+
+        print(" Client Starting ..... ")
+        try:
+            s_sock.connect((adresse_serveur, int(port)))
+        except Exception as e:
+            print ("Probleme de connexion", e.args)
+            sys.exit(1)
+
+        sendRequest(s_sock,request)
+        while 1:
+            ligne = s_sock.recv(1024)#serverResponse(s_sock)
+            if ligne:
+                #print ("on client from  serveur : ",type(ligne))
+                nouvelle_connexion_navigateur.sendall(ligne)
+
+        #ma_socket.close()
+        #print(repr(request))
 
 
 ma_socket.close()
-#kill -9 $(ps -A | grep python | awk '{print $1}')
-    #(evnt_entree,evnt_sortie,evnt_exception) = select.select(surveillance,[],[])
-    #for un_evenement in evnt_entree:
-    #    if (un_evenement == ma_socket): # il y a une demande de connexion
-    #        nouvelle_connexion, depuis = ma_socket.accept()
-    #        print ("Nouvelle connexion depuis ", depuis)
-    #        surveillance.append(nouvelle_connexion)
-    #        continue
-
-        # sinon cela concerne une socket connectée à un client
-    #    ligne = str(un_evenement.recv(1024),'UTF8')
-
-    #    if not ligne :
-    #        surveillance.remove(un_evenement) # le client s'est déconnecté
-    #    else :
-            #print (un_evenement.getpeername(),':',
-            # preparer le host
-
-    #        getHost(ligne)
-            # faire le client pour envoyer et envoyer une requete au serveur distination
-            #makeClient(host,port,"")
-    #        makeRequest(ligne)
-
-    #        continue
-
-# fermer all sockets
-#for client in surveillance:
-#    client.close()
+#kill -9 $(ps -A | grep python | awk '{print $1}
