@@ -1,7 +1,10 @@
 #! /usr/bin/python3
 # coding: utf-8
-import sys,os,socket,select,ssl
-import re
+import sys,os,socket,select,ssl,re
+from thread import *
+import threading
+
+#print_lock = threading.Lock()
 
 """
   Fonction qui permet de lire les données d'une socket
@@ -53,30 +56,46 @@ def getHost(ligne):
    Fonction qui permet de faire un client :
    -  pour se connecter au serveur web
 """
-def makeClient(host,port,request):
+def makeClient(host,port,request,nouvelle_connexion_navigateur):
 
-    adresse_serveur = socket.gethostbyname(host.replace(" ", ""))
-    numero_port = int(port)
-    print("IP addresse du serveur web  {} est : {} et le port est : {} ".format(host, adresse_serveur,numero_port))
+    adresse_serveur = socket.gethostbyname(host)
+    context = ssl.create_default_context()
     ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if int(port)==80:
+        s_sock=ma_socket
+    else:
+        s_sock = context.wrap_socket(ma_socket, server_hostname=host)
+
     print(" Client Starting ..... ")
     try:
-        ma_socket.connect((adresse_serveur, numero_port))
+        s_sock.connect((adresse_serveur, int(port)))
     except Exception as e:
         print ("Probleme de connexion", e.args)
         sys.exit(1)
 
-    pid = os.fork()
-    while 1:
-        if not pid:
-            ma_socket.sendall(bytes(request,"utf8"))
-        else: # dans le pere
-            ligne = str(ma_socket.recv(1024),"utf8")
-            if ligne:
-                print ("From serveur  :"+ligne)
-            #continue
-    ma_socket.close()
+    check_cache=isCache(host,request)
 
+    if check_cache==False: #s'il n'existe pas un cache du serveur web
+        sendRequest(s_sock,request) # envoyer la requête du client au serveur web
+    while 1:
+        if check_cache==False:
+            contenu =read_line(s_sock)
+            if contenu:
+                saveRessource(host,contenu) # sauvegarder le contenu du serveur web
+                # envoyer la response au navigateur
+                #nouvelle_connexion_navigateur.sendall(contenu)
+        else:
+            contenuCache=getRessource(host)
+            filename = "ressources/"+host
+            f = open(filename, 'rb')
+            l = f.read(1024)
+            while l:
+               nouvelle_connexion_navigateur.send(l)
+            print('Sent ', repr(l))
+            l = f.read(1024)
+            f.close()
+            print_lock.release()
+    s_sock.close()
 """
     Fonction qui envoit une requête au serveur web
 """
@@ -96,6 +115,42 @@ def serverResponse(socket_client):
 """
 def sendServerResponse():
     print("")
+
+
+"""
+        Fonction qui permet de garder une ressource
+"""
+
+def saveRessource(host,contenu):
+    file = open("ressources/"+host, "w")
+    file.write(contenu)
+    file.close()
+
+"""
+    Focntion qui permet de récuperer une ressource qui est dans le cache
+"""
+def getRessource(host):
+    if os.path.isfile("ressources/"+host):
+        try:
+            file = open("ressources/"+host)
+        except Exception as e:
+            print(e.args)
+            sys.exit(1)
+        contenu = file.readline()
+        file.close()
+        return contenu
+
+"""
+    Fonction qui permet de vérifier s'il existe un cache de la requête
+"""
+def isCache(host,request):
+    if request.split("\r\n")[0]=="GET / HTTP/1.0": # si c la 1ere requête GET
+        if os.path.isfile("ressources/"+host): # si il existe un cache
+            return True
+        return False
+
+
+
 
 
 """
@@ -133,7 +188,6 @@ ma_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP)
 ma_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 ma_socket.bind(('127.0.0.1', 8080))
 ma_socket.listen(socket.SOMAXCONN)
-#surveillance = [ma_socket]
 print(" Server listening ..... ")
 while 1:
     (nouvelle_connexion_navigateur, TSAP_depuis) = ma_socket.accept()
@@ -143,8 +197,9 @@ while 1:
         ligne=ligne.decode()
         host,port=getHost(ligne)
         request=makeRequest(ligne)
+
         ## Faire le client
-        print(" le host : ",host)
+        #print(" la request  : ",request)
         adresse_serveur = socket.gethostbyname(host)
         context = ssl.create_default_context()
         ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -160,13 +215,21 @@ while 1:
             print ("Probleme de connexion", e.args)
             sys.exit(1)
 
-        sendRequest(s_sock,request)
+        check_cache=isCache(host,request)
+
+        if check_cache==False: #s'il n'existe pas un cache du serveur web
+            sendRequest(s_sock,request) # envoyer la requête du client au serveur web
         while 1:
-            ligne = s_sock.recv(1024)#serverResponse(s_sock)
-            if ligne:
-                #ma_socket.close()
-                print(ligne)
-                #nouvelle_connexion_navigateur.sendall(ligne)
+            if check_cache==False:
+                contenu =read_line(s_sock)
+                if contenu:
+                    saveRessource(host,contenu) # sauvegarder le contenu du serveur web
+                    # envoyer la response au navigateur
+                    #nouvelle_connexion_navigateur.sendall(contenu)
+            else:
+                contenuCache=getRessource(host)
+                # envoyer la responde au naviagteur 
+                #nouvelle_connexion_navigateur.sendall(contenu)
 
         #ma_socket.close()
         #print(repr(request))

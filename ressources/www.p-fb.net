@@ -1,0 +1,15 @@
+HTTP/1.1 304 Not Modified
+Date: Sun, 26 Dec 2021 16:55:35 GMT
+Via: 1.1 varnish
+Cache-Control: max-age=600
+ETag: "61c38167-837f"
+Expires: Sun, 26 Dec 2021 10:56:58 GMT
+Age: 256
+Connection: close
+X-Served-By: cache-cdg20744-CDG
+X-Cache: HIT
+X-Cache-Hits: 1
+X-Timer: S1640537736.735099,VS0,VE1
+Vary: Accept-Encoding
+X-Fastly-Request-ID: 99397846603f6b2bacd64dc18af7b80fd0da9d4c
+
