@@ -40,14 +40,14 @@ def getHost(ligne):
             if(len(item.split(":"))==3): # si y'a le port 443
                 # ajouter www dans le host quand y'a pas
                 host=item.split(":")[1]
-                if host.split(".")[0] not in ["www","Www","WWW","wWw","wwW"]:
+                if host.split(".")[0].replace(" ","") not in ["www","Www","WWW","wWw","wwW"]:
                     host="www."+host.replace(" ","")
                 port=item.split(":")[2]
             else:
                 host=item.split(":")[1]
-                if host.split(".")[0] not in ["www","Www","WWW","wWw","wwW"]:
+                if host.split(".")[0].replace(" ","") not in ["www","Www","WWW","wWw","wwW"]:
                     host="www."+host.replace(" ","")
-            return host,port
+            return host.replace(" ",""),port
 
 """
    Fonction qui permet de faire un client :
@@ -144,7 +144,8 @@ while 1:
         host,port=getHost(ligne)
         request=makeRequest(ligne)
         ## Faire le client
-        adresse_serveur = socket.gethostbyname(host.replace(" ", ""))
+        print(" le host : ",host)
+        adresse_serveur = socket.gethostbyname(host)
         context = ssl.create_default_context()
         ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if int(port)==80:
@@ -163,8 +164,9 @@ while 1:
         while 1:
             ligne = s_sock.recv(1024)#serverResponse(s_sock)
             if ligne:
-                #print ("on client from  serveur : ",type(ligne))
-                nouvelle_connexion_navigateur.sendall(ligne)
+                #ma_socket.close()
+                print(ligne)
+                #nouvelle_connexion_navigateur.sendall(ligne)
 
         #ma_socket.close()
         #print(repr(request))
