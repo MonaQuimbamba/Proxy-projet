@@ -1,6 +1,9 @@
 #! /usr/bin/python3
-import sys,os,socket,select
-import re
+# coding: utf-8
+import sys,os,socket,select,ssl,re
+from thread import *
+import threading
+
 
 """
   Fonction qui permet de lire les données d'une socket
@@ -28,59 +31,83 @@ def read_line(ma_socket):
   - le numéro de port s'il est indiqué ( par défault le port 80 )
 """
 def getHost(ligne):
-    re_get_host= re.compile(r'Host:([\s\S]*)$') # regex pour trouver l'host dans une requete
-    host = re_get_host.search(ligne)
-    if host:
-        return host.groups(1)[0].strip("\\r\\n").split(":")
+    port=80
+    host=""
+    for item in ligne.splitlines():
+        if item.split(":")[0]=="Host":
+            if(len(item.split(":"))==3): # si y'a le port 443
+                # ajouter www dans le host quand y'a pas
+                host=item.split(":")[1]
+                if host.split(".")[0].replace(" ","") not in ["www","Www","WWW","wWw","wwW"]:
+                    host="www."+host.replace(" ","")
+                port=item.split(":")[2]
+            else:
+                host=item.split(":")[1]
+                if host.split(".")[0].replace(" ","") not in ["www","Www","WWW","wWw","wwW"]:
+                    host="www."+host.replace(" ","")
+            return host.replace(" ",""),port
 
 """
    Fonction qui permet de faire un client :
    -  pour se connecter au serveur web
 """
-def makeClient(hostName,port,request):
-    adresse_serveur = socket.gethostbyname(hostName.replace(" ", ""))
-    numero_port = int(port)
-    print("IP address of the host name {} is: {}".format(hostName, adresse_serveur))
+def client(host,port,request,nouvelle_connexion_navigateur):
+    try:
+        adresse_serveur = socket.gethostbyname(host)
+    except Exception as e:
+        print ("Probleme dans le host ", e.args)
+        sys.exit(1)
+
     ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s_sock=ma_socket
+
     print(" Client Starting ..... ")
     try:
-        ma_socket.connect((adresse_serveur, numero_port))
+        s_sock.connect((adresse_serveur, int(port)))
     except Exception as e:
         print ("Probleme de connexion", e.args)
         sys.exit(1)
 
-    pid = os.fork()
+    s_sock.sendall(request.encode())# envoyer la requête du client au serveur web
     while 1:
-        if not pid:
-            continue
-            #ma_socket.sendall(bytes(tapez,"utf8"))
-        else: # dans le pere
-            ligne = str(ma_socket.recv(1024),"utf8")
-            if not ligne:
-                break
-            print ("From serveur  : "+hostName +" "+ligne)
-
+        response = read_line(s_sock)
+        if (len(response) > 0):
+            nouvelle_connexion_navigateur.send(response)
+        else:
+            break
+    s_sock.close()
+    nouvelle_connexion_navigateur.close()
 
 """
-    Fonction qui envoit une requête au serveur web
+        Fonction qui permet de garder une ressource
 """
-def sendRequest():
-    print("")
+def saveRessource(host,contenu):
+    file = open("ressources/"+host, "w")
+    file.write(contenu)
+    file.close()
 
 """
-    Fonction va récuperer les infos en réponse du serveur web
+    Focntion qui permet de récuperer une ressource qui est dans le cache
 """
-
-def serverResponse():
-    print("")
-
+def getRessource(host):
+    if os.path.isfile("ressources/"+host):
+        try:
+            file = open("ressources/"+host)
+        except Exception as e:
+            print(e.args)
+            sys.exit(1)
+        contenu = file.readline()
+        file.close()
+        return contenu
 
 """
-    Fonction va renvoyer les infos en réponse au navigateur web
+    Fonction qui permet de vérifier s'il existe un cache de la requête
 """
-def sendServerResponse():
-    print("")
-
+def isCache(host,request):
+    if request.split("\r\n")[0]=="GET / HTTP/1.0": # si c la 1ere requête GET
+        if os.path.isfile("ressources/"+host): # si il existe un cache
+            return True
+        return False
 
 """
    Fonction qui permet de preparer la requete
@@ -88,56 +115,59 @@ def sendServerResponse():
   - supprimer les lignes commençant par : Connection: Keep-Alive et Proxy-Connection: Keep-Alive
   - supprimer la ligne commençant par Accept-Encoding: gzip
 """
-def makeRequest(ligne):
-    ligne=ligne.replace("Connection: Keep-Alive","")
-    #ligne=ligne.replace("Proxy-Connection: Keep-Alive","")
-    #ligne=ligne.replace("Accept-Encoding: gzip","")
-    print(ligne)
+def request(ligne):
+    liste=ligne.splitlines()
+    ## faire la 1ere ligne
+    res=""
+    if liste[0].split(" ")[0]=="GET":
+        res+="GET / HTTP/1.0\r\n"
+
+    if liste[0].split(" ")[0]=="CONNECT":
+        #res+="GET / HTTP/1.0\r\n"
+        print(" Le proxy traite que les requêtes HTPP ")
+        sys.exit(1)
+
+    if liste[0].split(" ")[0]=="POST":
+        print(ligne)
+        #res+="POST / HTTP/1.0\r\n"
+    # faire l'en-tete
+    for i in range(1,len(liste)):
+        if liste[i].split(":")[0] not in ["Connection","Proxy-Connection","Accept-Encoding"]:
+            if liste[i]=="":
+                res=res.rstrip()
+                res+="\r\n\r\n"
+            else:
+                tmp=liste[i].rstrip()
+                res+=tmp+"\r\n"
+    return res
+
+
+def lancerClient(nouvelle_connexion_navigateur,contenu):
+    try:
+        contenu=contenu.decode()  # voir le contenu
+        host,port=getHost(contenu) # récuperer le host et port
+        requete=request(contenu) # preparer la requête
+        client(host,port,requete,nouvelle_connexion_navigateur) # démarrer le client
+    except Exception as e:
+        print ("Probleme dans ", e.args)
+        sys.exit(1)
+
+
 
 """ === main == """
 ma_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP)
 ma_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
 ma_socket.bind(('127.0.0.1', 8080))
 ma_socket.listen(socket.SOMAXCONN)
-#surveillance = [ma_socket]
 print(" Server listening ..... ")
 while 1:
-    (nouvelle_connexion, TSAP_depuis) = ma_socket.accept()
-    print ("Nouvelle connexion depuis ", TSAP_depuis)
-    while 1:
-        pid=os.fork()
-        if not pid:
-            ligne = str(nouvelle_connexion.recv(1024),'UTF8')
-            if not ligne:
-                break
-            print("From client : "+ligne)
-        else: # dans le pere
-            tapez=input(" Entrer n'importe quoi ")
-            nouvelle_connexion.sendall(bytes(tapez,"utf8"))
-    #(evnt_entree,evnt_sortie,evnt_exception) = select.select(surveillance,[],[])
-    #for un_evenement in evnt_entree:
-    #    if (un_evenement == ma_socket): # il y a une demande de connexion
-    #        nouvelle_connexion, depuis = ma_socket.accept()
-    #        print ("Nouvelle connexion depuis ", depuis)
-    #        surveillance.append(nouvelle_connexion)
-    #        continue
+    try:
+        (nouvelle_connexion_navigateur, TSAP_depuis) = ma_socket.accept()
+        print ("Nouvelle connexion depuis ", TSAP_depuis)
+        contenu = nouvelle_connexion_navigateur.recv(9092)
+        start_new_thread(lancerClient,((nouvelle_connexion_navigateur,contenu)))
+    except KeyboardInterrupt:
+       ma_socket.close()
+       sys.exit(1)
 
-        # sinon cela concerne une socket connectée à un client
-    #    ligne = str(un_evenement.recv(1024),'UTF8')
-
-    #    if not ligne :
-    #        surveillance.remove(un_evenement) # le client s'est déconnecté
-    #    else :
-            #print (un_evenement.getpeername(),':',
-            # preparer le host
-
-    #        getHost(ligne)
-            # faire le client pour envoyer et envoyer une requete au serveur distination
-            #makeClient(host,port,"")
-    #        makeRequest(ligne)
-
-    #        continue
-
-# fermer all sockets
-#for client in surveillance:
-#    client.close()
+ma_socket.close()
