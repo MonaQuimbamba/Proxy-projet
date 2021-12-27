@@ -141,7 +141,9 @@ def request(ligne):
                 res+=tmp+"\r\n"
     return res
 
-
+"""
+    Cette Fonction va demarrer le client 
+"""
 def lancerClient(nouvelle_connexion_navigateur,contenu):
     try:
         contenu=contenu.decode()  # voir le contenu
