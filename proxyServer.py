@@ -1,8 +1,8 @@
 #! /usr/bin/python3
 # coding: utf-8
 import sys,os,socket,select,ssl,re
-from thread import *
-import threading
+from _thread import *
+
 
 
 """
@@ -142,7 +142,7 @@ def request(ligne):
     return res
 
 """
-    Cette Fonction va demarrer le client 
+    Cette Fonction va demarrer le client
 """
 def lancerClient(nouvelle_connexion_navigateur,contenu):
     try:
