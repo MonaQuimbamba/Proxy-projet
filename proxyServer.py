@@ -48,6 +48,48 @@ def getHost(ligne):
                     host="http://"+host.replace(" ","")
             return host.replace(" ",""),port
 
+
+"""
+ Fonction qui permet de récuperer les paramètres pour le filtre
+"""
+
+def getFiltres():
+    f = open("Config/configFile.txt", "r")
+    filter={}
+    for line in f:
+    	if line:
+    		line=line.replace(" ","")
+    		if len(line.split(":"))==2:
+    			fil=line.split(":")[0]
+    			valeur=line.split(":")[1].strip()
+    			filter[fil]=valeur
+    return filter
+
+"""
+    Focntion qui permet d'appliquer un filtre
+"""
+
+def filterHtml(response):
+    filtrers=getFiltres()
+    for filter in filtrers:
+        if filter=="titre":
+            debutTag=response.find("<title>")
+            finTag=response.find("</title>")
+            if debutTag!=-1 and finTag!=-1:
+                print("pour le titre")
+                response= response[:debutTag+3] + filtrers[filter] + response[finTag:]
+            else:
+                response=response
+        if filter=="paragraphe":
+            debutTag=response.find("<p>")
+            finTag=response.find("</p>")
+            if debutTag!=-1 and finTag!=-1:
+                print("pour le p")
+                response= response[:debutTag+3] + filtrers[filter] + response[finTag:]
+            else:
+                response=response
+
+    return response
 """
    Fonction qui permet de faire un client :
    -  pour se connecter au serveur web
@@ -81,6 +123,7 @@ def client(host,port,request,nouvelle_connexion_navigateur):
     while 1:
         response = read_line(s_sock)
         if (len(response) > 0):
+            response=filterHtml(response)
             nouvelle_connexion_navigateur.sendall(response)
         else:
             break

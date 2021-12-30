@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+
+fieldset *
+{
+  display: block;
+  margin: 10px;
+}
+</style>
+
+ <script src="js/FileSaver.js"></script>
+<script language="Javascript" >
+function saveConfig(text)
+{
+      var blob = new Blob([text],{ type: "text/plain;charset=utf-8" });
+      saveAs(blob, "configFile.txt")
+};
+
+</script>
+</head>
+<body>
+<fieldset>
+    <legend>Entrer les paramètres de configuration du proxy et puis enregistrer le fichier dans le dossier Config</legend>
+    <textarea rows=2 cols=70>
+                titre:
+                paragraphe :
+    </textarea>
+    <button id="btnSave">Sauver la config</button>
+</fieldset>
+</body>
+
+<script type="text/javascript">
+  document.querySelector('#btnSave').addEventListener('click', () => {
+    const textArea = document.querySelector('textarea');
+
+    saveConfig(textArea.value);
+  });
+
+
+  window.addEventListener("load", function(event) {
+  //  const textArea = document.querySelector('textarea').innerHTML
+
+  });
+
+
+</script>
+</html>
