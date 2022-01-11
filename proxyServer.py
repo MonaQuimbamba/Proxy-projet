@@ -40,12 +40,12 @@ def getHost(ligne):
                 # ajouter www dans le host quand y'a pas
                 host=item.split(":")[1]
                 if host.split(".")[0].replace(" ","") not in ["www","Www","WWW","wWw","wwW"]:
-                    host="http://"+host.replace(" ","")
+                    host=""+host.replace(" ","")
                 port=item.split(":")[2]
             else:
                 host=item.split(":")[1]
                 if host.split(".")[0].replace(" ","") not in ["www","Www","WWW","wWw","wwW"]:
-                    host="http://"+host.replace(" ","")
+                    host=""+host.replace(" ","")
             return host.replace(" ",""),port
 
 
@@ -141,14 +141,14 @@ def request(ligne,host):
     ## faire la 1ere ligne
     res=""
     if liste[0].split(" ")[0]=="GET":
-        res+=liste[0].split(" ")[0]+" "+liste[0].split(" ")[1]+" HTTP/1.0\r\n"
+        res+=liste[0].split(" ")[0]+" "+"/"+" HTTP/1.0\r\n"
 
     if liste[0].split(" ")[0]=="CONNECT":
         print(" Le proxy traite que les requêtes HTPP ")
         sys.exit(1)
 
     if liste[0].split(" ")[0]=="POST":
-        res+=liste[0].split(" ")[0]+" "+liste[0].split(" ")[1]+" HTTP/1.0\r\n"
+        res+=liste[0].split(" ")[0]+" "+"/"+" HTTP/1.0\r\n"
     # faire l'en-tete
     for i in range(1,len(liste)):
         if liste[i].split(":")[0] not in ["Connection","Proxy-Connection","Accept-Encoding"]:
