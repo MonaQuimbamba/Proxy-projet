@@ -4,7 +4,8 @@ import sys,os,socket,select,ssl,re
 import threading
 import subprocess
 
-
+global goFilter
+goFilter = True
 
 """
   Fonction qui permet de lire les données d'une socket
@@ -54,47 +55,88 @@ def getHost(ligne):
 """
 
 def getFiltres():
-    f = open("Config/configFile.txt", "r")
-    filter={}
-    for line in f:
-    	if line:
-    		line=line.replace(" ","")
-    		if len(line.split(":"))==2:
-    			fil=line.split(":")[0]
-    			valeur=line.split(":")[1].strip()
-    			filter[fil]=valeur
+    try:
+        f = open("Config/configFile.txt", "r")
+        filter={}
+        for line in f:
+        	if line:
+        		line=line.replace(" ","")
+        		if len(line.split(":"))==2:
+        			fil=line.split(":")[0]
+        			valeur=line.split(":")[1].strip()
+        			filter[fil]=valeur.replace(" ","")
+        f.close()
+    except Exception as e:
+        print ("Probleme dans la fonction getFilter", e.args)
+        sys.exit(1)
     return filter
 
 """
-    Focntion qui permet d'appliquer un filtre
+    Focntion qui permet de faire le filtre
 """
 
-def filterHtml(response):
-    filtrers=getFiltres()
-    for filter in filtrers:
-        if filter=="titre":
-            debutTag=response.find("<title>")
-            finTag=response.find("</title>")
-            if debutTag!=-1 and finTag!=-1:
-                print("pour le titre")
-                response= response[:debutTag+3] + filtrers[filter] + response[finTag:]
-            else:
-                response=response
-        if filter=="paragraphe":
-            debutTag=response.find("<p>")
-            finTag=response.find("</p>")
-            if debutTag!=-1 and finTag!=-1:
-                print("pour le p")
-                response= response[:debutTag+3] + filtrers[filter] + response[finTag:]
-            else:
-                response=response
+def filterHtml(ligne):
+    res=""
+    try:
+        filtrers=getFiltres()
+        for filter in filtrers:
+            if filter=="titre":
+                debutTag=ligne.find("<title>")
+                finTag=ligne.find("</title>")
+                if debutTag!=-1 and finTag!=-1:
+                    ligne= ligne[:debutTag+7] + filtrers[filter] + ligne[finTag:]
+                    res+=ligne
+                else:
+                    res+=ligne
+            """if filter =="paragraphe":
+                debutTag=ligne.find("<p>")
+                finTag=ligne.find("</p>")
+                if debutTag!=-1 and finTag!=-1:
+                    ligne= ligne[:debutTag+3] + filtrers[filter] + ligne[finTag:]
+                    res+=ligne
+                else:
+                    res+=ligne"""
+    except Exception as e:
+        print ("Probleme dans la fonction filterHtml", e.args)
+        sys.exit(1)
+    return res
 
-    return response
+"""
+    Fonction qui permet d'enregistrer la reponse dans un fichier avant le filtre
+"""
+def saveResponse(response):
+    try:
+        f = open("tmpHtml.txt", "w")
+        f.write(response)
+        f.close()
+    except Exception as e:
+        print ("Probleme dans la fonction saveResponse", e.args)
+        sys.exit(1)
+
+"""""
+    Fonction qui permet d'appliquer le filtre
+"""""
+def filterApplied():
+    res=""
+    try:
+        f = open("tmpHtml.txt", "r")
+        for line in f:
+            if line not in ["\n\r","","\n"]:
+                lin=line.replace(" ","")
+                res+=filterHtml(line)
+        f.close()
+    except Exception as e:
+        print ("Probleme dans la fonction filterApplied", e.args)
+        sys.exit(1)
+    return res
+
+
 """
    Fonction qui permet de faire un client :
    -  pour se connecter au serveur web
 """
 def client(host,port,request,nouvelle_connexion_navigateur):
+    global goFilter
 
     cmd_ext = subprocess.Popen('host -t a '+host, stdin=subprocess.PIPE, stdout=subprocess.PIPE,shell=True)
     (sortie_standard,sortie_erreur) = cmd_ext.communicate()
@@ -111,8 +153,6 @@ def client(host,port,request,nouvelle_connexion_navigateur):
 
     ma_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s_sock=ma_socket
-
-    #print(" Client Starting ..... ")
     try:
         s_sock.connect((adresse_serveur, int(port)))
     except Exception as e:
@@ -123,8 +163,12 @@ def client(host,port,request,nouvelle_connexion_navigateur):
     while 1:
         response = read_line(s_sock)
         if (len(response) > 0):
-            response=filterHtml(response)
-            nouvelle_connexion_navigateur.sendall(response)
+            if response:
+                #if goFilter:
+                saveResponse(response)
+                response=filterApplied()
+                #goFilter=False
+                nouvelle_connexion_navigateur.sendall(response)
         else:
             break
     s_sock.close()
@@ -142,11 +186,8 @@ def request(ligne,host):
     res=""
     if liste[0].split(" ")[0]=="GET":
         res+=liste[0].split(" ")[0]+" "+liste[0].split(" ")[1]+" HTTP/1.0\r\n"
-
     if liste[0].split(" ")[0]=="CONNECT":
         print(" Le proxy traite que les requêtes HTPP ")
-        sys.exit(1)
-
     if liste[0].split(" ")[0]=="POST":
         res+=liste[0].split(" ")[0]+" "+liste[0].split(" ")[1]+" HTTP/1.0\r\n"
     # faire l'en-tete
@@ -164,16 +205,12 @@ def request(ligne,host):
     Cette Fonction va demarrer le client
 """
 def lancerClient(nouvelle_connexion_navigateur,contenu):
-    try:
+    if contenu:
         contenu=contenu.decode()  # voir le contenu
         host,port=getHost(contenu) # récuperer le host et port
-        #print(repr(contenu))
         requete=request(contenu,host) # preparer la requête
-
         client(host,port,requete,nouvelle_connexion_navigateur) # démarrer le client
-    except Exception as e:
-        print ("Probleme dans la fonction lancerClient", e.args)
-        sys.exit(1)
+
 
 """ === main == """
 ma_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP)
@@ -184,7 +221,6 @@ print(" Server listening ..... ")
 while 1:
     try:
         (nouvelle_connexion_navigateur, TSAP_depuis) = ma_socket.accept()
-        #print ("Nouvelle connexion depuis ", TSAP_depuis)
         contenu = nouvelle_connexion_navigateur.recv(9092)
         clientStart = threading.Thread(target=lancerClient, args=(nouvelle_connexion_navigateur,contenu))
         clientStart.start()
